@@ -22,6 +22,7 @@
 #define _UTILS_h
 
 #define BOOL_TO_ONOFF(b) (b ? "on" : "off")
+#define ONOFF_TO_BOOL(s) (strcmp(s, "on") ? false : true)
 #define NIBBLE_TO_HEX_CHAR(i) ((i <= 9) ? ('0' + i) : ('A' - 10 + i))
 #define HIGH_NIBBLE(i) ((i >> 4) & 0x0F)
 #define LOW_NIBBLE(i) (i & 0x0F)

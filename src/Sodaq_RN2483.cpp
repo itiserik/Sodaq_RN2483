@@ -25,10 +25,12 @@
 #ifdef DEBUG
 #define debugPrintLn(...) { if (this->diagStream) this->diagStream->println(__VA_ARGS__); }
 #define debugPrint(...) { if (this->diagStream) this->diagStream->print(__VA_ARGS__); }
+#define debugWrite(...) { if (this->diagStream) this->diagStream->write(__VA_ARGS__); }
 #warning "Debug mode is ON"
 #else
 #define debugPrintLn(...)
 #define debugPrint(...)
+#define debugWrite(...)
 #endif
 
 // Structure for mapping error response strings and error codes.
@@ -69,11 +71,12 @@ void Sodaq_RN2483::init(Stream& stream)
         isBufferInitialized = true;
     }
 #endif
+	resetDevice();
 }
 
 // Initializes the device and connects to the network using Over-The-Air Activation.
 // Returns true on successful connection.
-bool Sodaq_RN2483::initOTA(Stream& stream, const uint8_t devEUI[8], const uint8_t appEUI[8], const uint8_t appKey[16], bool adr)
+bool Sodaq_RN2483::initOTA(Stream& stream, const uint8_t devEUI[8], const uint8_t appEUI[8], const uint8_t appKey[16])
 {
     debugPrintLn("[initOTA]");
 
@@ -83,23 +86,23 @@ bool Sodaq_RN2483::initOTA(Stream& stream, const uint8_t devEUI[8], const uint8_
         setMacParam(STR_DEV_EUI, devEUI, 8) &&
         setMacParam(STR_APP_EUI, appEUI, 8) &&
         setMacParam(STR_APP_KEY, appKey, 16) &&
-        setMacParam(STR_ADR, BOOL_TO_ONOFF(adr)) &&
+     //   setMacParam(STR_ADR, BOOL_TO_ONOFF(adr)) &&
         joinNetwork(STR_OTAA);
 }
 
 // Initializes the device and connects to the network using Activation By Personalization.
 // Returns true on successful connection.
-bool Sodaq_RN2483::initABP(Stream& stream, const uint8_t devAddr[4], const uint8_t appSKey[16], const uint8_t nwkSKey[16], bool adr)
+bool Sodaq_RN2483::initABP(Stream& stream, const uint8_t devAddr[4], const uint8_t appSKey[16], const uint8_t nwkSKey[16])
 {
     debugPrintLn("[initABP]");
 
     init(stream);
 
     return resetDevice() &&
-        setMacParam(STR_DEV_ADDR, devAddr, 4) &&
+		setMacParam(STR_DEV_ADDR, devAddr, 4) &&
         setMacParam(STR_APP_SESSION_KEY, appSKey, 16) &&
         setMacParam(STR_NETWORK_SESSION_KEY, nwkSKey, 16) &&
-        setMacParam(STR_ADR, BOOL_TO_ONOFF(adr)) &&
+        //setMacParam(STR_ADR, BOOL_TO_ONOFF(adr)) &&
         joinNetwork(STR_ABP);
 }
 
@@ -175,7 +178,8 @@ uint16_t Sodaq_RN2483::receive(uint8_t* buffer, uint16_t size,
 uint16_t Sodaq_RN2483::readLn(char* buffer, uint16_t size, uint16_t start)
 {
     int len = this->loraStream->readBytesUntil('\n', buffer + start, size);
-    this->inputBuffer[start + len - 1] = 0; // bytes until \n always end with \r, so get rid of it (-1)
+	if (len > 0)
+		this->inputBuffer[start + len - 1] = 0; // bytes until \n always end with \r, so get rid of it (-1)
 
     return len;
 }
@@ -185,13 +189,15 @@ uint16_t Sodaq_RN2483::readLn(char* buffer, uint16_t size, uint16_t start)
 bool Sodaq_RN2483::expectString(const char* str, uint16_t timeout)
 {
     debugPrint("[expectString] expecting "); debugPrint(str);
+	
+	
 
-    unsigned long start = millis();
-    while (millis() < start + timeout) {
+    unsigned long end  = millis() + timeout;
+    while (millis() < end) {
         debugPrint(".");
-
-        if (readLn() > 0) {
-            debugPrint("("); debugPrint(this->inputBuffer); debugPrint(")");
+		uint16_t len = readLn();
+        if (len > 0) {
+            debugPrint("("); debugWrite((uint8_t*)this->inputBuffer, len); debugPrint(")");
 
             if (strstr(this->inputBuffer, str) != NULL) {
                 debugPrintLn(" found a match!");
@@ -199,7 +205,7 @@ bool Sodaq_RN2483::expectString(const char* str, uint16_t timeout)
                 return true;
             }
 
-            return false;
+            //return false;
         }
     }
 
@@ -243,18 +249,19 @@ bool Sodaq_RN2483::joinNetwork(const char* type)
 bool Sodaq_RN2483::setMacParam(const char* paramName, const uint8_t* paramValue, uint16_t size)
 {
     debugPrint("[setMacParam] "); debugPrint(paramName); debugPrint("= [array]");
-
     this->loraStream->print(STR_CMD_SET);
     this->loraStream->print(paramName);
+	this->loraStream->print(" ");
 
     for (uint16_t i = 0; i < size; ++i) {
         this->loraStream->print(static_cast<char>(NIBBLE_TO_HEX_CHAR(HIGH_NIBBLE(paramValue[i]))));
         this->loraStream->print(static_cast<char>(NIBBLE_TO_HEX_CHAR(LOW_NIBBLE(paramValue[i]))));
     }
 
+	
+	
     this->loraStream->print(CRLF);
-
-    return expectOK();
+	return expectOK();
 }
 
 // Sends the given mac command together with the given paramValue
@@ -270,6 +277,7 @@ bool Sodaq_RN2483::setMacParam(const char* paramName, uint8_t paramValue)
 
     this->loraStream->print(STR_CMD_SET);
     this->loraStream->print(paramName);
+	this->loraStream->print(" ");
     this->loraStream->print(paramValue);
     this->loraStream->print(CRLF);
 
@@ -289,10 +297,66 @@ bool Sodaq_RN2483::setMacParam(const char* paramName, const char* paramValue)
 
     this->loraStream->print(STR_CMD_SET);
     this->loraStream->print(paramName);
+	this->loraStream->print(" ");
     this->loraStream->print(paramValue);
     this->loraStream->print(CRLF);
 
     return expectOK();
+}
+
+bool Sodaq_RN2483::getMacParam(const char* paramName, char* paramValue, uint8_t size)
+{
+	debugPrint("[getMacParam] ");
+    debugPrint(paramName);
+	debugPrint("? ");
+
+    this->loraStream->print(STR_CMD_GET);
+    this->loraStream->print(paramName);
+    this->loraStream->print(CRLF);
+
+    if (readLn() > 0) {
+		strncpy (paramValue, this->inputBuffer, size-1);
+		paramValue[size-1] = 0x00;
+		debugPrintLn(paramValue);
+		return true;
+	}
+	debugPrintLn(" ERROR!");
+	return false;
+	
+}
+
+bool Sodaq_RN2483::getSysParam(const char* paramName, uint8_t* paramValue, uint8_t size)
+{
+	debugPrint("[getSysParam] ");
+    debugPrint(paramName);
+	debugPrint("? ");
+
+    this->loraStream->print(STR_SYS_GET);
+    this->loraStream->print(paramName);
+    this->loraStream->print(CRLF);
+
+    uint16_t len = readLn();
+    if (len > 0) {
+	    for (uint16_t i = 0; i < len; i+=2) {
+			paramValue[i/2] = HEX_PAIR_TO_BYTE(this->inputBuffer[i],this->inputBuffer[i+1]);			
+		}
+		
+		return true;
+	}
+	debugPrintLn(" ERROR!");
+	return false;
+	
+}
+
+bool Sodaq_RN2483::macSave()
+{
+	debugPrint("[macSave] ");
+    
+    this->loraStream->print(STR_CMD_SAVE);
+    this->loraStream->print(CRLF);
+
+    return expectOK();
+	
 }
 
 // Returns the enum that is mapped to the given "error" message.

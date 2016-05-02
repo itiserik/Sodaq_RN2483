@@ -82,11 +82,14 @@ public:
 
     // Initializes the device and connects to the network using Over-The-Air Activation.
     // Returns true on successful connection.
-    bool initOTA(Stream& stream, const uint8_t devEUI[8], const uint8_t appEUI[8], const uint8_t appKey[16], bool adr = true);
+    bool initOTA(Stream& stream, const uint8_t devEUI[8], const uint8_t appEUI[8], const uint8_t appKey[16]);
 
     // Initializes the device and connects to the network using Activation By Personalization.
     // Returns true on successful connection.
-    bool initABP(Stream& stream, const uint8_t devAddr[4], const uint8_t appSKey[16], const uint8_t nwkSKey[16], bool adr = true);
+    bool initABP(Stream& stream, const uint8_t devAddr[4], const uint8_t appSKey[16], const uint8_t nwkSKey[16]);
+	
+	// Takes care of the init tasks common to both initOTA() and initABP.
+    void init(Stream& stream);
 
     // Sets the optional "Diagnostics and Debug" stream.
     void setDiag(Stream& stream) { diagStream = &stream; };
@@ -149,8 +152,7 @@ private:
     char inputBuffer[DEFAULT_INPUT_BUFFER_SIZE];
     char receivedPayloadBuffer[DEFAULT_RECEIVED_PAYLOAD_BUFFER_SIZE];
 #endif
-    // Takes care of the init tasks common to both initOTA() and initABP.
-    inline void init(Stream& stream);
+
 
     // Reads a line from the device stream into the "buffer" starting at the "start" position of the buffer.
     // Returns the number of bytes read.
@@ -167,27 +169,35 @@ private:
 
     // Sends a reset command to the module and waits for the success response (or timeout).
     // Returns true on success.
+public:
     bool resetDevice();
-
     // Sends a join network command to the device and waits for the response (or timeout).
     // Returns true on success.
     bool joinNetwork(const char* type);
+private:
 
     // Sends the given mac command together with the given paramValue
     // to the device and awaits for the response.
     // Returns true on success.
     // NOTE: paramName should include a trailing space
+public:
     bool setMacParam(const char* paramName, const uint8_t* paramValue, uint16_t size);
     bool setMacParam(const char* paramName, uint8_t paramValue);
     bool setMacParam(const char* paramName, const char* paramValue);
 
+	// NOTE: paramName may include a trailing space
+	bool getMacParam(const char* paramName, char* paramValue, uint8_t size);
+	bool getSysParam(const char* paramName, uint8_t* paramValue, uint8_t size);
+	bool macSave();
+private:
     // Returns the enum that is mapped to the given "error" message.
     uint8_t lookupMacTransmitError(const char* error);
 
     // Sends a a payload and blocks until there is a response back, or the receive windows have closed,
     // or the hard timeout has passed.
+public:
     uint8_t macTransmit(const char* type, uint8_t port, const uint8_t* payload, uint8_t size);
-
+private:
     // Parses the input buffer and copies the received payload into the "received payload" buffer
     // when a "mac rx" message has been received. It is called internally by macTransmit().
     // Returns 0 (NoError) or otherwise one of the MacTransmitErrorCodes.
